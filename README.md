@@ -5,7 +5,7 @@ Ultra-fast CPU-based document reranking API that provides Cohere-compatible endp
 ## Features
 
 - 🚀 **Ultra-fast**: CPU-based inference with models from 4MB to 4GB
-- 🔗 **Cohere-compatible**: Drop-in replacement for Cohere's `/v2/rerank` endpoint
+- 🔗 **Cohere-compatible**: Drop-in replacement for Cohere's `/v1/rerank` and `/v2/rerank` endpoints
 - 🎯 **Multiple models**: TinyBERT, MiniLM, T5-Flan, MultiBERT, and Zephyr 7B
 - 📦 **Lightweight**: No GPU required, runs anywhere
 - 🌐 **Production-ready**: CORS support, health checks, error handling
@@ -62,13 +62,16 @@ curl -X POST "http://localhost:8000/v2/rerank" \
 
 ## API Endpoints
 
+### `POST /v1/rerank`
+Rerank documents based on relevance to a query (Cohere v1-compatible).
+
 ### `POST /v2/rerank`
-Rerank documents based on relevance to a query (Cohere-compatible).
+Rerank documents based on relevance to a query (Cohere v2-compatible).
 
 ### `GET /health`
 Health check endpoint.
 
-### `GET /v2/models`
+### `GET /v1/models` | `GET /v2/models`
 List available reranking models.
 
 ### `GET /`

@@ -1,7 +1,7 @@
 # FastAPI Cohere-Compatible Reranker using FlashRank
 
 ## Project Overview
-Create a FastAPI wrapper that provides a Cohere-compatible reranker API endpoint, leveraging FlashRank's ultra-fast CPU-based reranking models.
+Create a FastAPI wrapper that provides Cohere-compatible reranker API endpoints (v1 and v2), leveraging FlashRank's ultra-fast CPU-based reranking models.
 
 ## Architecture
 ```
@@ -11,7 +11,7 @@ Cohere Request → FastAPI → FlashRank Format → FlashRank Inference → Rele
 ## Key Components
 
 ### 1. FastAPI Application
-- **Endpoint**: `POST /v2/rerank`
+- **Endpoints**: `POST /v1/rerank` and `POST /v2/rerank`
 - **Pydantic models** for Cohere API request/response validation
 - **Error handling** and proper HTTP status codes
 
@@ -42,10 +42,10 @@ Cohere Request → FastAPI → FlashRank Format → FlashRank Inference → Rele
    - Define Pydantic models for API schemas
    - Setup dependencies and configuration
 
-2. **Implement core rerank endpoint**
-   - Create `/v2/rerank` POST endpoint
+2. **Implement core rerank endpoints**
+   - Create `/v1/rerank` and `/v2/rerank` POST endpoints
    - Add request validation and error handling
-   - Implement basic response structure
+   - Implement v1 and v2 response structures
 
 3. **Build request transformation logic**
    - Convert Cohere format to FlashRank RerankRequest format
@@ -71,6 +71,7 @@ Cohere Request → FastAPI → FlashRank Format → FlashRank Inference → Rele
    - Environment variables for FlashRank model selection
    - Model caching and memory optimization
    - Health check endpoints and model warmup
+   - Model listing endpoints for v1 and v2 compatibility
 
 ## API Specification
 
@@ -85,7 +86,7 @@ Cohere Request → FastAPI → FlashRank Format → FlashRank Inference → Rele
 }
 ```
 
-### Response Format (Cohere-compatible)
+### Response Format (V2 - Cohere-compatible)
 ```json
 {
   "results": [
@@ -97,6 +98,23 @@ Cohere Request → FastAPI → FlashRank Format → FlashRank Inference → Rele
       }
     }
   ]
+}
+```
+
+### Response Format (V1 - Cohere-compatible)
+```json
+{
+  "id": "12345678-1234-1234-1234-123456789abc",
+  "results": [
+    {
+      "index": 0,
+      "relevance_score": 0.9109375
+    }
+  ],
+  "meta": {
+    "api_version": {"version": "1"},
+    "billed_units": {"search_units": 1}
+  }
 }
 ```
 
@@ -119,4 +137,4 @@ Cohere Request → FastAPI → FlashRank Format → FlashRank Inference → Rele
 - **rank-T5-flan**: Best zero-shot performance (~110MB)
 - **ms-marco-MultiBERT-L-12**: Multilingual support (~150MB)
 
-This implementation provides a drop-in replacement for Cohere's rerank API while leveraging FlashRank's ultra-fast CPU-based reranking models.
+This implementation provides a drop-in replacement for Cohere's rerank API (both v1 and v2) while leveraging FlashRank's ultra-fast CPU-based reranking models.
