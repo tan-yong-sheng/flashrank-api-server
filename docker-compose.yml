@@ -1,6 +1,8 @@
 services:
   flashrank-api:
+    container_name: flashrank-api-server
     build: .
+    image: flashrank-api-server
     ports:
       - "8000:8000"
     env_file:
