@@ -8,6 +8,7 @@ endpoints while leveraging FlashRank's ultra-fast reranking models.
 
 import os
 import logging
+import uuid
 from typing import List, Optional, Dict, Any, Set
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -123,6 +124,19 @@ class RerankRequest(BaseModel):
         return v
 
 
+# V1 API Models (simpler response format)
+class RerankV1Result(BaseModel):
+    index: int = Field(..., description="Original index of the document")
+    relevance_score: float = Field(..., description="Relevance score between 0 and 1")
+
+
+class RerankV1Response(BaseModel):
+    id: str = Field(..., description="Request ID")
+    results: List[RerankV1Result] = Field(..., description="List of ranked documents")
+    meta: Dict[str, Any] = Field(..., description="Metadata about the request")
+
+
+# V2 API Models (with document wrapper)
 class RerankResult(BaseModel):
     index: int = Field(..., description="Original index of the document")
     relevance_score: float = Field(..., description="Relevance score between 0 and 1")
@@ -288,13 +302,94 @@ async def root():
         "version": "1.0.0",
         "status": "running",
         "endpoints": {
-            "rerank": "/v2/rerank",
+            "rerank_v1": "/v1/rerank",
+            "rerank_v2": "/v2/rerank",
             "health": "/health",
             "docs": "/docs"
         },
         "configured_models": list(CONFIGURED_MODELS),
         "downloaded_models": list(DOWNLOADED_MODELS)
     }
+
+
+@app.post("/v1/rerank", response_model=RerankV1Response)
+async def rerank_documents_v1(request: RerankRequest):
+    """
+    Rerank documents based on relevance to a query - V1 API format.
+    
+    Compatible with Cohere's v1 rerank API specification.
+    Returns simpler response format without document wrapper.
+    """
+    try:
+        logger.info(f"V1 Rerank request: model={request.model}, query_len={len(request.query)}, docs={len(request.documents)}")
+        
+        # Get or create ranker for the requested model
+        ranker = get_or_create_ranker(request.model)
+        
+        # Prepare documents for FlashRank
+        max_tokens = request.max_tokens_per_doc or Config.MAX_LENGTH
+        passages = []
+        
+        for i, doc_text in enumerate(request.documents):
+            # Truncate document if needed
+            truncated_text = truncate_text(doc_text, max_tokens)
+            
+            passages.append({
+                "id": i,
+                "text": truncated_text,
+                "meta": {"original_index": i}
+            })
+        
+        # Create FlashRank request
+        flashrank_request = FlashRankRequest(query=request.query, passages=passages)
+        
+        # Perform reranking
+        try:
+            results = ranker.rerank(flashrank_request)
+        except Exception as e:
+            logger.error(f"FlashRank reranking failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Reranking failed: {str(e)}"
+            )
+        
+        # Convert results to Cohere V1 format (simpler format)
+        rerank_results = []
+        for result in results:
+            original_index = result.get("meta", {}).get("original_index", result["id"])
+            
+            rerank_results.append(RerankV1Result(
+                index=original_index,
+                relevance_score=float(result["score"])
+            ))
+        
+        # Apply top_n filtering if specified
+        if request.top_n:
+            rerank_results = rerank_results[:request.top_n]
+        
+        # Generate request ID and metadata
+        request_id = str(uuid.uuid4())
+        meta = {
+            "api_version": {"version": "1"},
+            "billed_units": {"search_units": 1}
+        }
+        
+        logger.info(f"V1 Reranking completed: returned {len(rerank_results)} results")
+        
+        return RerankV1Response(
+            id=request_id,
+            results=rerank_results,
+            meta=meta
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in v1 rerank endpoint: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 
 @app.post("/v2/rerank", response_model=RerankResponse)
@@ -368,6 +463,7 @@ async def rerank_documents(request: RerankRequest):
 
 
 @app.get("/v2/models")
+@app.get("/v1/models")
 async def list_models():
     """List locally downloaded reranking models"""
     if not DOWNLOADED_MODELS:

@@ -4,7 +4,9 @@
       "mcp__tavily-mcp__tavily-extract",
       "mcp__tavily-mcp__tavily-search",
       "mcp__context7-mcp__resolve-library-id",
-      "mcp__context7-mcp__get-library-docs"
+      "mcp__context7-mcp__get-library-docs",
+      "WebSearch",
+      "WebFetch"
     ],
     "deny": [],
     "ask": []

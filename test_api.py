@@ -38,7 +38,7 @@ def test_list_models():
     print()
 
 def test_basic_rerank():
-    """Test basic reranking functionality"""
+    """Test basic reranking functionality for both V1 and V2"""
     print("Testing basic reranking...")
     
     # First get available models
@@ -70,22 +70,46 @@ def test_basic_rerank():
         ]
     }
     
+    # Test V1 endpoint
+    print("  Testing V1 endpoint...")
+    start_time = time.time()
+    response = requests.post(f"{BASE_URL}/v1/rerank", json=payload)
+    duration = time.time() - start_time
+    
+    print(f"    V1 Status: {response.status_code}")
+    print(f"    V1 Duration: {duration:.3f}s")
+    
+    if response.status_code == 200:
+        v1_data = response.json()
+        results = v1_data["results"]
+        print(f"    V1 Results count: {len(results)}")
+        print(f"    V1 Request ID: {v1_data['id']}")
+        print(f"    V1 API Version: {v1_data['meta']['api_version']['version']}")
+        
+        for i, result in enumerate(results[:3]):  # Show top 3
+            print(f"      {i+1}. Index: {result['index']}, Score: {result['relevance_score']:.4f}")
+    else:
+        print(f"    V1 Error: {response.text}")
+    
+    # Test V2 endpoint
+    print("  Testing V2 endpoint...")
     start_time = time.time()
     response = requests.post(f"{BASE_URL}/v2/rerank", json=payload)
     duration = time.time() - start_time
     
-    print(f"Status: {response.status_code}")
-    print(f"Duration: {duration:.3f}s")
+    print(f"    V2 Status: {response.status_code}")
+    print(f"    V2 Duration: {duration:.3f}s")
     
     if response.status_code == 200:
-        results = response.json()["results"]
-        print(f"Results count: {len(results)}")
+        v2_data = response.json()
+        results = v2_data["results"]
+        print(f"    V2 Results count: {len(results)}")
         
         for i, result in enumerate(results[:3]):  # Show top 3
-            print(f"  {i+1}. Index: {result['index']}, Score: {result['relevance_score']:.4f}")
-            print(f"     Text: {result['document']['text'][:80]}...")
+            print(f"      {i+1}. Index: {result['index']}, Score: {result['relevance_score']:.4f}")
+            print(f"          Text: {result['document']['text'][:80]}...")
     else:
-        print(f"Error: {response.text}")
+        print(f"    V2 Error: {response.text}")
     print()
 
 def test_top_n_filtering():
@@ -183,6 +207,81 @@ def test_different_models():
         else:
             print(f"    Failed - Status: {response.status_code}, Error: {response.text}")
     print()
+
+def test_v1_specific_features():
+    """Test V1 API specific features and response format"""
+    print("Testing V1 API specific features...")
+    
+    # Get available models
+    response = requests.get(f"{BASE_URL}/v2/models")
+    if response.status_code != 200:
+        print("Failed to get models list")
+        return
+    
+    models_data = response.json()
+    available_models = [model["name"] for model in models_data.get("models", [])]
+    
+    if not available_models:
+        print("No models available for testing")
+        return
+    
+    model_to_use = available_models[0]
+    
+    payload = {
+        "model": model_to_use,
+        "query": "artificial intelligence and machine learning",
+        "documents": [
+            "Artificial intelligence encompasses machine learning and deep learning techniques.",
+            "Weather patterns are influenced by atmospheric pressure and temperature changes.",
+            "Machine learning algorithms can be supervised, unsupervised, or reinforcement-based.",
+            "Cooking involves combining ingredients according to specific recipes.",
+            "Deep neural networks are a subset of machine learning models."
+        ],
+        "top_n": 3
+    }
+    
+    start_time = time.time()
+    response = requests.post(f"{BASE_URL}/v1/rerank", json=payload)
+    duration = time.time() - start_time
+    
+    print(f"Status: {response.status_code}")
+    print(f"Duration: {duration:.3f}s")
+    
+    if response.status_code == 200:
+        data = response.json()
+        
+        # Verify V1 response structure
+        assert "id" in data, "V1 response missing 'id' field"
+        assert "results" in data, "V1 response missing 'results' field"
+        assert "meta" in data, "V1 response missing 'meta' field"
+        
+        # Check meta structure
+        meta = data["meta"]
+        assert "api_version" in meta, "V1 response meta missing 'api_version'"
+        assert "billed_units" in meta, "V1 response meta missing 'billed_units'"
+        assert meta["api_version"]["version"] == "1", f"Expected API version 1, got {meta['api_version']['version']}"
+        
+        # Check results structure
+        results = data["results"]
+        print(f"V1 Results count: {len(results)} (requested top_n=3)")
+        assert len(results) <= 3, f"Expected max 3 results, got {len(results)}"
+        
+        for i, result in enumerate(results):
+            assert "index" in result, f"Result {i} missing 'index' field"
+            assert "relevance_score" in result, f"Result {i} missing 'relevance_score' field"
+            assert "document" not in result, f"V1 API should not have 'document' wrapper in result {i}"
+            
+            print(f"  {i+1}. Index: {result['index']}, Score: {result['relevance_score']:.4f}")
+        
+        print(f"✓ V1 API response structure validated")
+        print(f"  Request ID: {data['id']}")
+        print(f"  API Version: {meta['api_version']['version']}")
+        print(f"  Billed Units: {meta['billed_units']['search_units']}")
+        
+    else:
+        print(f"Error: {response.text}")
+    print()
+
 
 def test_error_handling():
     """Test error handling"""
@@ -289,6 +388,7 @@ def main():
         test_basic_rerank()
         test_top_n_filtering()
         test_different_models()
+        test_v1_specific_features()
         test_error_handling()
         test_performance()
         

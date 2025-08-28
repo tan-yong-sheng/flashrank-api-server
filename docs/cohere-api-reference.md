@@ -2,13 +2,139 @@
 
 ## Overview
 
-The `/v2/rerank` endpoint provides document reranking functionality compatible with Cohere's API specification. It takes a query and a list of documents, then returns them ranked by relevance.
+This API provides document reranking functionality compatible with Cohere's API specification. It supports both `/v1/rerank` and `/v2/rerank` endpoints with slightly different response formats.
 
-## Endpoint
+## Available Endpoints
 
+- **`POST /v1/rerank`** - V1 API format (simpler response structure)
+- **`POST /v2/rerank`** - V2 API format (with document wrapper in response)
+
+Both endpoints take a query and a list of documents, then return them ranked by relevance.
+
+---
+
+## V1 Rerank Endpoint
+
+### Endpoint
 ```
-POST /v2/rerank
+POST /v1/rerank
 ```
+
+### Request Format
+
+#### Headers
+```bash
+Content-Type: application/json
+```
+
+#### Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `model` | string | Yes | The reranking model to use (e.g., "rerank-v3.5") |
+| `query` | string | Yes | The search query to rank documents against |
+| `documents` | array[string] | Yes | List of document texts to rerank |
+| `top_n` | integer | No | Maximum number of documents to return (default: all) |
+| `max_tokens_per_doc` | integer | No | Maximum tokens per document (default: 4096) |
+
+#### Example Request Body
+```json
+{
+  "model": "rerank-v3.5",
+  "query": "What is the capital of the United States?",
+  "documents": [
+    "Carson City is the capital city of the American state of Nevada.",
+    "Washington, D.C. is the capital of the United States.",
+    "New York City is the most populous city in the United States.",
+    "Los Angeles is a major city in California.",
+    "The United States federal government is headquartered in Washington, D.C."
+  ],
+  "top_n": 3
+}
+```
+
+### Response Format
+
+#### Success Response (200 OK)
+
+```json
+{
+  "id": "12345678-1234-1234-1234-123456789abc",
+  "results": [
+    {
+      "index": 1,
+      "relevance_score": 0.9108734
+    },
+    {
+      "index": 4,
+      "relevance_score": 0.8567432
+    },
+    {
+      "index": 2,
+      "relevance_score": 0.2341567
+    }
+  ],
+  "meta": {
+    "api_version": {
+      "version": "1"
+    },
+    "billed_units": {
+      "search_units": 1
+    }
+  }
+}
+```
+
+#### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique request ID |
+| `results` | array | Array of ranked document results |
+| `results[].index` | integer | Original index of the document in the input array |
+| `results[].relevance_score` | float | Relevance score between 0 and 1 |
+| `meta` | object | Metadata about the request |
+| `meta.api_version.version` | string | API version used |
+| `meta.billed_units.search_units` | integer | Billing information |
+
+### cURL Examples
+
+#### Basic V1 Reranking Request
+```bash
+curl -X POST "http://localhost:8000/v1/rerank" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rerank-v3.5",
+    "query": "What is the capital of the United States?",
+    "documents": [
+      "Carson City is the capital city of the American state of Nevada.",
+      "Washington, D.C. is the capital of the United States.",
+      "New York City is the most populous city in the United States."
+    ]
+  }'
+```
+
+#### With Top-N Filtering
+```bash
+curl -X POST "http://localhost:8000/v1/rerank" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rerank-v3.5",
+    "query": "machine learning algorithms",
+    "documents": [
+      "Neural networks are a type of machine learning algorithm.",
+      "Linear regression is a statistical method.",
+      "Decision trees are used in machine learning for classification.",
+      "Cooking recipes require precise measurements.",
+      "Random forests combine multiple decision trees."
+    ],
+    "top_n": 3
+  }'
+```
+
+---
+
+## V2 Rerank Endpoint
 
 ## Request Format
 
