@@ -31,16 +31,18 @@ Content-Type: application/json
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model` | string | Yes | The reranking model to use (e.g., "rerank-v3.5") |
+| `model` | string | No | The reranking model to use (e.g., "ms-marco-TinyBERT-L-2-v2") |
 | `query` | string | Yes | The search query to rank documents against |
 | `documents` | array[string] | Yes | List of document texts to rerank |
 | `top_n` | integer | No | Maximum number of documents to return (default: all) |
-| `max_tokens_per_doc` | integer | No | Maximum tokens per document (default: 4096) |
+| `rank_fields` | array[string] | No | Fields to consider for reranking (for JSON objects) |
+| `return_documents` | boolean | No | Whether to return document text in results (default: false) |
+| `max_chunks_per_doc` | integer | No | Maximum number of chunks per document (default: 10) |
 
 #### Example Request Body
 ```json
 {
-  "model": "rerank-v3.5",
+  "model": "ms-marco-TinyBERT-L-2-v2",
   "query": "What is the capital of the United States?",
   "documents": [
     "Carson City is the capital city of the American state of Nevada.",
@@ -49,7 +51,9 @@ Content-Type: application/json
     "Los Angeles is a major city in California.",
     "The United States federal government is headquartered in Washington, D.C."
   ],
-  "top_n": 3
+  "top_n": 3,
+  "return_documents": true,
+  "max_chunks_per_doc": 10
 }
 ```
 
@@ -63,15 +67,18 @@ Content-Type: application/json
   "results": [
     {
       "index": 1,
-      "relevance_score": 0.9108734
+      "relevance_score": 0.9108734,
+      "text": "Washington, D.C. is the capital of the United States."
     },
     {
       "index": 4,
-      "relevance_score": 0.8567432
+      "relevance_score": 0.8567432,
+      "text": "The United States federal government is headquartered in Washington, D.C."
     },
     {
       "index": 2,
-      "relevance_score": 0.2341567
+      "relevance_score": 0.2341567,
+      "text": "New York City is the most populous city in the United States."
     }
   ],
   "meta": {
@@ -93,6 +100,7 @@ Content-Type: application/json
 | `results` | array | Array of ranked document results |
 | `results[].index` | integer | Original index of the document in the input array |
 | `results[].relevance_score` | float | Relevance score between 0 and 1 |
+| `results[].text` | string | Document text (only if return_documents=true) |
 | `meta` | object | Metadata about the request |
 | `meta.api_version.version` | string | API version used |
 | `meta.billed_units.search_units` | integer | Billing information |
@@ -147,7 +155,7 @@ Content-Type: application/json
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model` | string | Yes | The reranking model to use (e.g., "rerank-v3.5") |
+| `model` | string | Yes | The reranking model to use (e.g., "ms-marco-TinyBERT-L-2-v2") |
 | `query` | string | Yes | The search query to rank documents against |
 | `documents` | array[string] | Yes | List of document texts to rerank |
 | `top_n` | integer | No | Maximum number of documents to return (default: all) |
@@ -156,7 +164,7 @@ Content-Type: application/json
 ### Example Request Body
 ```json
 {
-  "model": "rerank-v3.5",
+  "model": "ms-marco-TinyBERT-L-2-v2",
   "query": "What is the capital of the United States?",
   "documents": [
     "Carson City is the capital city of the American state of Nevada.",

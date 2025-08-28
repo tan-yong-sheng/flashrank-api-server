@@ -227,6 +227,7 @@ def test_v1_specific_features():
     
     model_to_use = available_models[0]
     
+    # Test basic V1 request
     payload = {
         "model": model_to_use,
         "query": "artificial intelligence and machine learning",
@@ -240,12 +241,13 @@ def test_v1_specific_features():
         "top_n": 3
     }
     
+    print("  Testing basic V1 request...")
     start_time = time.time()
     response = requests.post(f"{BASE_URL}/v1/rerank", json=payload)
     duration = time.time() - start_time
     
-    print(f"Status: {response.status_code}")
-    print(f"Duration: {duration:.3f}s")
+    print(f"  Status: {response.status_code}")
+    print(f"  Duration: {duration:.3f}s")
     
     if response.status_code == 200:
         data = response.json()
@@ -263,23 +265,54 @@ def test_v1_specific_features():
         
         # Check results structure
         results = data["results"]
-        print(f"V1 Results count: {len(results)} (requested top_n=3)")
+        print(f"  V1 Results count: {len(results)} (requested top_n=3)")
         assert len(results) <= 3, f"Expected max 3 results, got {len(results)}"
         
         for i, result in enumerate(results):
             assert "index" in result, f"Result {i} missing 'index' field"
             assert "relevance_score" in result, f"Result {i} missing 'relevance_score' field"
             assert "document" not in result, f"V1 API should not have 'document' wrapper in result {i}"
+            assert "text" not in result, f"V1 API should not have 'text' field when return_documents=false in result {i}"
             
-            print(f"  {i+1}. Index: {result['index']}, Score: {result['relevance_score']:.4f}")
+            print(f"    {i+1}. Index: {result['index']}, Score: {result['relevance_score']:.4f}")
         
-        print(f"✓ V1 API response structure validated")
-        print(f"  Request ID: {data['id']}")
-        print(f"  API Version: {meta['api_version']['version']}")
-        print(f"  Billed Units: {meta['billed_units']['search_units']}")
-        
+        print(f"  ✓ V1 API response structure validated")
+        print(f"    Request ID: {data['id']}")
+        print(f"    API Version: {meta['api_version']['version']}")
+        print(f"    Billed Units: {meta['billed_units']['search_units']}")
     else:
-        print(f"Error: {response.text}")
+        print(f"  Error: {response.text}")
+    
+    # Test return_documents=True
+    print("  Testing return_documents=True...")
+    payload_with_docs = {**payload, "return_documents": True}
+    
+    response = requests.post(f"{BASE_URL}/v1/rerank", json=payload_with_docs)
+    
+    if response.status_code == 200:
+        data = response.json()
+        results = data["results"]
+        
+        for i, result in enumerate(results):
+            assert "text" in result, f"Result {i} should have 'text' field when return_documents=true"
+            print(f"    {i+1}. Index: {result['index']}, Score: {result['relevance_score']:.4f}")
+            print(f"        Text: {result['text'][:60]}...")
+        
+        print(f"  ✓ return_documents=True works correctly")
+    else:
+        print(f"  Error with return_documents=True: {response.text}")
+    
+    # Test max_chunks_per_doc parameter
+    print("  Testing max_chunks_per_doc parameter...")
+    payload_with_chunks = {**payload, "max_chunks_per_doc": 5}
+    
+    response = requests.post(f"{BASE_URL}/v1/rerank", json=payload_with_chunks)
+    
+    if response.status_code == 200:
+        print(f"  ✓ max_chunks_per_doc parameter accepted")
+    else:
+        print(f"  Error with max_chunks_per_doc: {response.text}")
+    
     print()
 
 

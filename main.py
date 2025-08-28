@@ -75,6 +75,8 @@ class Config:
     MAX_DOCUMENTS = int(os.getenv("MAX_DOCUMENTS", "1000"))
     DEFAULT_TOP_N = int(os.getenv("DEFAULT_TOP_N", "100"))
     MAX_LENGTH = int(os.getenv("MAX_LENGTH", "512"))
+    DEFAULT_MAX_TOKENS_V2 = int(os.getenv("DEFAULT_MAX_TOKENS_V2", "4096"))
+    DEFAULT_MAX_CHUNKS_PER_DOC = int(os.getenv("DEFAULT_MAX_CHUNKS_PER_DOC", "10"))
     CACHE_DIR = os.getenv("FLASHRANK_CACHE_DIR", None)
 
 
@@ -82,7 +84,8 @@ class Config:
 class Document(BaseModel):
     text: str = Field(..., description="The document text to rerank")
 
-class RerankRequest(BaseModel):
+# V1 API Request Model
+class RerankV1Request(BaseModel):
     model: str = Field(
         default=Config.DEFAULT_MODEL,
         description="The FlashRank model to use"
@@ -99,8 +102,57 @@ class RerankRequest(BaseModel):
         ge=1,
         description="Maximum number of documents to return"
     )
+    rank_fields: Optional[List[str]] = Field(
+        default=None,
+        description="Fields to consider for reranking (for JSON objects)"
+    )
+    return_documents: Optional[bool] = Field(
+        default=False,
+        description="Whether to return document text in results"
+    )
+    max_chunks_per_doc: Optional[int] = Field(
+        default=Config.DEFAULT_MAX_CHUNKS_PER_DOC,
+        ge=1,
+        description="Maximum number of chunks per document"
+    )
+
+    @field_validator('model')
+    @classmethod
+    def validate_model(cls, v):
+        if v not in DOWNLOADED_MODELS:
+            available_list = list(DOWNLOADED_MODELS) if DOWNLOADED_MODELS else list(CONFIGURED_MODELS)
+            raise ValueError(
+                f"Model '{v}' not available locally. Downloaded models: {available_list}"
+            )
+        return v
+
+    @field_validator('documents')
+    @classmethod
+    def validate_documents(cls, v):
+        if not v:
+            raise ValueError("At least one document is required")
+        return v
+
+# V2 API Request Model  
+class RerankV2Request(BaseModel):
+    model: str = Field(
+        ...,
+        description="The FlashRank model to use (required in v2)"
+    )
+    query: str = Field(..., description="The search query")
+    documents: List[str] = Field(
+        ..., 
+        min_items=1,
+        max_items=Config.MAX_DOCUMENTS,
+        description="List of document texts to rerank"
+    )
+    top_n: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Maximum number of documents to return"
+    )
     max_tokens_per_doc: Optional[int] = Field(
-        default=Config.MAX_LENGTH,
+        default=Config.DEFAULT_MAX_TOKENS_V2,
         ge=1,
         le=8192,
         description="Maximum tokens per document"
@@ -128,6 +180,9 @@ class RerankRequest(BaseModel):
 class RerankV1Result(BaseModel):
     index: int = Field(..., description="Original index of the document")
     relevance_score: float = Field(..., description="Relevance score between 0 and 1")
+    text: Optional[str] = Field(default=None, description="Document text (if return_documents=true)")
+    
+    model_config = {"exclude_none": True}
 
 
 class RerankV1Response(BaseModel):
@@ -313,7 +368,7 @@ async def root():
 
 
 @app.post("/v1/rerank", response_model=RerankV1Response)
-async def rerank_documents_v1(request: RerankRequest):
+async def rerank_documents_v1(request: RerankV1Request):
     """
     Rerank documents based on relevance to a query - V1 API format.
     
@@ -327,7 +382,8 @@ async def rerank_documents_v1(request: RerankRequest):
         ranker = get_or_create_ranker(request.model)
         
         # Prepare documents for FlashRank
-        max_tokens = request.max_tokens_per_doc or Config.MAX_LENGTH
+        # V1 doesn't have max_tokens_per_doc parameter, use a reasonable default
+        max_tokens = 512  # V1 default token limit
         passages = []
         
         for i, doc_text in enumerate(request.documents):
@@ -358,10 +414,17 @@ async def rerank_documents_v1(request: RerankRequest):
         for result in results:
             original_index = result.get("meta", {}).get("original_index", result["id"])
             
-            rerank_results.append(RerankV1Result(
-                index=original_index,
-                relevance_score=float(result["score"])
-            ))
+            # Create base result
+            result_data = {
+                "index": original_index,
+                "relevance_score": float(result["score"])
+            }
+            
+            # Add document text if return_documents=True
+            if request.return_documents:
+                result_data["text"] = request.documents[original_index]
+            
+            rerank_results.append(RerankV1Result(**result_data))
         
         # Apply top_n filtering if specified
         if request.top_n:
@@ -393,7 +456,7 @@ async def rerank_documents_v1(request: RerankRequest):
 
 
 @app.post("/v2/rerank", response_model=RerankResponse)
-async def rerank_documents(request: RerankRequest):
+async def rerank_documents(request: RerankV2Request):
     """
     Rerank documents based on relevance to a query.
     
@@ -406,7 +469,7 @@ async def rerank_documents(request: RerankRequest):
         ranker = get_or_create_ranker(request.model)
         
         # Prepare documents for FlashRank
-        max_tokens = request.max_tokens_per_doc or Config.MAX_LENGTH
+        max_tokens = request.max_tokens_per_doc or Config.DEFAULT_MAX_TOKENS_V2
         passages = []
         
         for i, doc_text in enumerate(request.documents):
